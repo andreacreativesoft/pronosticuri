@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { getFixturesByIds, mapApiStatus } from '@/lib/api-football';
+import { getEventsByIds, mapEventStatus } from '@/lib/api-football';
 import { calculatePoints } from '@/lib/points';
 
 export async function GET() {
@@ -18,35 +18,42 @@ export async function GET() {
       return NextResponse.json({ message: 'No fixtures to update', updated: 0 });
     }
 
-    const apiIds = pendingFixtures.map((f) => f.api_fixture_id);
-    const apiFixtures = await getFixturesByIds(apiIds);
+    const apiIds = pendingFixtures.map((f) => String(f.api_fixture_id));
+    const apiEvents = await getEventsByIds(apiIds);
 
     let updated = 0;
 
-    for (const apiFixture of apiFixtures) {
-      const status = mapApiStatus(apiFixture.fixture.status.short);
+    for (const event of apiEvents) {
+      const status = mapEventStatus(event);
 
       if (status !== 'finished') continue;
-      if (apiFixture.goals.home == null || apiFixture.goals.away == null) continue;
+      if (event.intHomeScore == null || event.intAwayScore == null) continue;
+
+      const homeScore = parseInt(event.intHomeScore, 10);
+      const awayScore = parseInt(event.intAwayScore, 10);
+
+      if (isNaN(homeScore) || isNaN(awayScore)) continue;
+
+      const eventId = parseInt(event.idEvent, 10);
 
       // Update fixture score and status
       const { error: updateError } = await supabaseAdmin
         .from('fixtures')
         .update({
-          home_score: apiFixture.goals.home,
-          away_score: apiFixture.goals.away,
+          home_score: homeScore,
+          away_score: awayScore,
           status: 'finished',
         })
-        .eq('api_fixture_id', apiFixture.fixture.id);
+        .eq('api_fixture_id', eventId);
 
       if (updateError) {
-        console.error(`Error updating fixture ${apiFixture.fixture.id}:`, updateError);
+        console.error(`Error updating fixture ${event.idEvent}:`, updateError);
         continue;
       }
 
       // Get the internal fixture ID
       const dbFixture = pendingFixtures.find(
-        (f) => f.api_fixture_id === apiFixture.fixture.id
+        (f) => f.api_fixture_id === eventId
       );
       if (!dbFixture) continue;
 
@@ -61,8 +68,8 @@ export async function GET() {
           const { points } = calculatePoints(
             pred.predicted_home,
             pred.predicted_away,
-            apiFixture.goals.home!,
-            apiFixture.goals.away!
+            homeScore,
+            awayScore
           );
 
           await supabaseAdmin

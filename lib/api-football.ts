@@ -1,101 +1,124 @@
-const API_KEY = process.env.API_FOOTBALL_KEY!;
-const BASE_URL = 'https://v3.football.api-sports.io';
-const LEAGUE_ID = 283; // Romanian Liga 1
+// TheSportsDB integration for Romanian Liga 1
+// Free API — no key required (uses public key "3")
+// League ID: 4691 (Romanian Liga I / SuperLiga)
 
-interface ApiFixture {
-  fixture: {
-    id: number;
-    date: string;
-    status: {
-      short: string;
-      long: string;
-    };
-  };
-  league: {
-    round: string;
-  };
-  teams: {
-    home: {
-      id: number;
-      name: string;
-      logo: string;
-    };
-    away: {
-      id: number;
-      name: string;
-      logo: string;
-    };
-  };
-  goals: {
-    home: number | null;
-    away: number | null;
-  };
+const BASE_URL = 'https://www.thesportsdb.com/api/v1/json/3';
+const LEAGUE_ID = '4691';
+
+export interface SportsDbEvent {
+  idEvent: string;
+  strEvent: string;
+  strHomeTeam: string;
+  strAwayTeam: string;
+  strHomeTeamBadge: string | null;
+  strAwayTeamBadge: string | null;
+  intHomeScore: string | null;
+  intAwayScore: string | null;
+  intRound: string;
+  dateEvent: string;
+  strTime: string;
+  strTimestamp: string;
+  strStatus: string | null;
+  strPostponed: string | null;
+  strSeason: string;
 }
 
-interface ApiResponse {
-  response: ApiFixture[];
-  errors: Record<string, string>;
+interface EventsResponse {
+  events: SportsDbEvent[] | null;
 }
 
-async function fetchApi(endpoint: string, params: Record<string, string>): Promise<ApiResponse> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
-  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
-
-  const response = await fetch(url.toString(), {
-    headers: {
-      'x-apisports-key': API_KEY,
-    },
-  });
+async function fetchApi(endpoint: string): Promise<EventsResponse> {
+  const url = `${BASE_URL}/${endpoint}`;
+  const response = await fetch(url);
 
   if (!response.ok) {
-    throw new Error(`API-Football request failed: ${response.status}`);
+    throw new Error(`TheSportsDB request failed: ${response.status}`);
   }
 
   return response.json();
 }
 
-export async function getFixturesForSeason(season: number): Promise<ApiFixture[]> {
-  const data = await fetchApi('/fixtures', {
-    league: LEAGUE_ID.toString(),
-    season: season.toString(),
-  });
-  return data.response;
+export async function getSeasonFixtures(season: string): Promise<SportsDbEvent[]> {
+  // season format: "2025-2026"
+  const data = await fetchApi(`eventsseason.php?id=${LEAGUE_ID}&s=${season}`);
+  return data.events || [];
 }
 
-export async function getFixturesForRound(season: number, round: number): Promise<ApiFixture[]> {
-  const data = await fetchApi('/fixtures', {
-    league: LEAGUE_ID.toString(),
-    season: season.toString(),
-    round: `Regular Season - ${round}`,
-  });
-  return data.response;
+export async function getNextFixtures(): Promise<SportsDbEvent[]> {
+  const data = await fetchApi(`eventsnextleague.php?id=${LEAGUE_ID}`);
+  return data.events || [];
 }
 
-export async function getFixturesByIds(ids: number[]): Promise<ApiFixture[]> {
-  // API-Football allows fetching one fixture at a time by ID
-  const results: ApiFixture[] = [];
-  for (const id of ids) {
-    const data = await fetchApi('/fixtures', { id: id.toString() });
-    if (data.response.length > 0) {
-      results.push(data.response[0]);
-    }
+export async function getPastFixtures(): Promise<SportsDbEvent[]> {
+  const data = await fetchApi(`eventspastleague.php?id=${LEAGUE_ID}`);
+  return data.events || [];
+}
+
+export async function getEventById(eventId: string): Promise<SportsDbEvent | null> {
+  const response = await fetch(`${BASE_URL}/lookupevent.php?id=${eventId}`);
+  if (!response.ok) return null;
+  const data = await response.json();
+  return data.events?.[0] || null;
+}
+
+export async function getEventsByIds(eventIds: string[]): Promise<SportsDbEvent[]> {
+  const results: SportsDbEvent[] = [];
+  for (const id of eventIds) {
+    const event = await getEventById(id);
+    if (event) results.push(event);
   }
   return results;
 }
 
-export function parseRoundNumber(round: string): number {
-  // "Regular Season - 14" -> 14
-  const match = round.match(/Regular Season - (\d+)/);
-  return match ? parseInt(match[1], 10) : 0;
+export function parseRoundNumber(intRound: string): number {
+  const num = parseInt(intRound, 10);
+  return isNaN(num) ? 0 : num;
 }
 
-export function mapApiStatus(shortStatus: string): 'scheduled' | 'live' | 'finished' {
-  const finishedStatuses = ['FT', 'AET', 'PEN'];
-  const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'];
+export function mapEventStatus(event: SportsDbEvent): 'scheduled' | 'live' | 'finished' {
+  const status = event.strStatus?.toLowerCase() || '';
 
-  if (finishedStatuses.includes(shortStatus)) return 'finished';
-  if (liveStatuses.includes(shortStatus)) return 'live';
+  // If there's a final score and the status indicates it's done
+  if (
+    status === 'match finished' ||
+    status === 'ft' ||
+    status === 'aet' ||
+    status === 'pen' ||
+    status.includes('finished')
+  ) {
+    return 'finished';
+  }
+
+  // If it has scores but no finished status, it might be live
+  if (
+    status.includes('live') ||
+    status === '1h' ||
+    status === '2h' ||
+    status === 'ht' ||
+    status === 'et' ||
+    status.includes('progress')
+  ) {
+    return 'live';
+  }
+
+  // Also check: if intHomeScore and intAwayScore are set and event date is in the past
+  if (event.intHomeScore !== null && event.intAwayScore !== null) {
+    const eventDate = new Date(event.strTimestamp || `${event.dateEvent}T${event.strTime || '00:00:00'}`);
+    const now = new Date();
+    if (now.getTime() - eventDate.getTime() > 3 * 60 * 60 * 1000) {
+      return 'finished';
+    }
+  }
+
   return 'scheduled';
 }
 
-export type { ApiFixture };
+export function buildKickOff(event: SportsDbEvent): string {
+  // strTimestamp is UTC, e.g. "2025-08-15T18:00:00+00:00"
+  if (event.strTimestamp) {
+    return event.strTimestamp;
+  }
+  // Fallback to dateEvent + strTime
+  const time = event.strTime || '00:00:00';
+  return `${event.dateEvent}T${time}+00:00`;
+}
