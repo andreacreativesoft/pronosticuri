@@ -1,68 +1,114 @@
-// TheSportsDB integration for Romanian Liga 1
-// Free API — no key required (uses public key "3")
-// League ID: 4691 (Romanian Liga I / SuperLiga)
+// Sofascore API for Romanian SuperLiga
+// Free, no API key needed
+// Tournament ID: 152 (Romanian SuperLiga)
 
-const BASE_URL = 'https://www.thesportsdb.com/api/v1/json/3';
-const LEAGUE_ID = '4691';
+const BASE_URL = 'https://www.sofascore.com/api/v1';
+const TOURNAMENT_ID = 152;
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  Accept: 'application/json',
+};
 
-export interface SportsDbEvent {
-  idEvent: string;
-  strEvent: string;
-  strHomeTeam: string;
-  strAwayTeam: string;
-  strHomeTeamBadge: string | null;
-  strAwayTeamBadge: string | null;
-  intHomeScore: string | null;
-  intAwayScore: string | null;
-  intRound: string;
-  dateEvent: string;
-  strTime: string;
-  strTimestamp: string;
-  strStatus: string | null;
-  strPostponed: string | null;
-  strSeason: string;
+export interface SofascoreEvent {
+  id: number;
+  slug: string;
+  status: {
+    code: number;
+    description: string;
+    type: string; // "finished", "notstarted", "inprogress"
+  };
+  homeTeam: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  awayTeam: {
+    id: number;
+    name: string;
+    slug: string;
+  };
+  homeScore: {
+    current?: number;
+    display?: number;
+  };
+  awayScore: {
+    current?: number;
+    display?: number;
+  };
+  roundInfo?: {
+    round: number;
+  };
+  startTimestamp: number; // Unix timestamp
+}
+
+interface SeasonsResponse {
+  seasons: { id: number; name: string; year: string }[];
 }
 
 interface EventsResponse {
-  events: SportsDbEvent[] | null;
+  events: SofascoreEvent[];
 }
 
-async function fetchApi(endpoint: string): Promise<EventsResponse> {
-  const url = `${BASE_URL}/${endpoint}`;
-  const response = await fetch(url);
+async function fetchApi<T>(endpoint: string): Promise<T> {
+  const url = `${BASE_URL}${endpoint}`;
+  const response = await fetch(url, { headers: HEADERS });
 
   if (!response.ok) {
-    throw new Error(`TheSportsDB request failed: ${response.status}`);
+    throw new Error(`Sofascore request failed: ${response.status} for ${endpoint}`);
   }
 
   return response.json();
 }
 
-export async function getSeasonFixtures(season: string): Promise<SportsDbEvent[]> {
-  // season format: "2025-2026"
-  const data = await fetchApi(`eventsseason.php?id=${LEAGUE_ID}&s=${season}`);
+// Get the season ID for a given year (e.g. "25/26")
+export async function getSeasonId(): Promise<number | null> {
+  const data = await fetchApi<SeasonsResponse>(
+    `/unique-tournament/${TOURNAMENT_ID}/seasons`
+  );
+  if (!data.seasons || data.seasons.length === 0) return null;
+  // Most recent season is first
+  return data.seasons[0].id;
+}
+
+// Get all fixtures for a round
+export async function getFixturesForRound(seasonId: number, round: number): Promise<SofascoreEvent[]> {
+  const data = await fetchApi<EventsResponse>(
+    `/unique-tournament/${TOURNAMENT_ID}/season/${seasonId}/events/round/${round}`
+  );
   return data.events || [];
 }
 
-export async function getNextFixtures(): Promise<SportsDbEvent[]> {
-  const data = await fetchApi(`eventsnextleague.php?id=${LEAGUE_ID}`);
-  return data.events || [];
+// Get all rounds for the season by fetching rounds until empty
+export async function getAllSeasonFixtures(seasonId: number): Promise<SofascoreEvent[]> {
+  const allEvents: SofascoreEvent[] = [];
+
+  for (let round = 1; round <= 40; round++) {
+    try {
+      const events = await getFixturesForRound(seasonId, round);
+      if (!events || events.length === 0) break;
+      allEvents.push(...events);
+    } catch {
+      // No more rounds
+      break;
+    }
+  }
+
+  return allEvents;
 }
 
-export async function getPastFixtures(): Promise<SportsDbEvent[]> {
-  const data = await fetchApi(`eventspastleague.php?id=${LEAGUE_ID}`);
-  return data.events || [];
+// Get a single event by ID
+export async function getEventById(eventId: number): Promise<SofascoreEvent | null> {
+  try {
+    const data = await fetchApi<{ event: SofascoreEvent }>(`/event/${eventId}`);
+    return data.event || null;
+  } catch {
+    return null;
+  }
 }
 
-export async function getEventById(eventId: string): Promise<SportsDbEvent | null> {
-  const response = await fetch(`${BASE_URL}/lookupevent.php?id=${eventId}`);
-  if (!response.ok) return null;
-  const data = await response.json();
-  return data.events?.[0] || null;
-}
-
-export async function getEventsByIds(eventIds: string[]): Promise<SportsDbEvent[]> {
-  const results: SportsDbEvent[] = [];
+// Get multiple events by IDs
+export async function getEventsByIds(eventIds: number[]): Promise<SofascoreEvent[]> {
+  const results: SofascoreEvent[] = [];
   for (const id of eventIds) {
     const event = await getEventById(id);
     if (event) results.push(event);
@@ -70,55 +116,19 @@ export async function getEventsByIds(eventIds: string[]): Promise<SportsDbEvent[
   return results;
 }
 
-export function parseRoundNumber(intRound: string): number {
-  const num = parseInt(intRound, 10);
-  return isNaN(num) ? 0 : num;
+// Team logo URL from Sofascore
+export function getTeamLogo(teamId: number): string {
+  return `https://api.sofascore.app/api/v1/team/${teamId}/image`;
 }
 
-export function mapEventStatus(event: SportsDbEvent): 'scheduled' | 'live' | 'finished' {
-  const status = event.strStatus?.toLowerCase() || '';
+export function mapEventStatus(event: SofascoreEvent): 'scheduled' | 'live' | 'finished' {
+  const type = event.status?.type?.toLowerCase() || '';
 
-  // If there's a final score and the status indicates it's done
-  if (
-    status === 'match finished' ||
-    status === 'ft' ||
-    status === 'aet' ||
-    status === 'pen' ||
-    status.includes('finished')
-  ) {
-    return 'finished';
-  }
-
-  // If it has scores but no finished status, it might be live
-  if (
-    status.includes('live') ||
-    status === '1h' ||
-    status === '2h' ||
-    status === 'ht' ||
-    status === 'et' ||
-    status.includes('progress')
-  ) {
-    return 'live';
-  }
-
-  // Also check: if intHomeScore and intAwayScore are set and event date is in the past
-  if (event.intHomeScore !== null && event.intAwayScore !== null) {
-    const eventDate = new Date(event.strTimestamp || `${event.dateEvent}T${event.strTime || '00:00:00'}`);
-    const now = new Date();
-    if (now.getTime() - eventDate.getTime() > 3 * 60 * 60 * 1000) {
-      return 'finished';
-    }
-  }
-
+  if (type === 'finished') return 'finished';
+  if (type === 'inprogress') return 'live';
   return 'scheduled';
 }
 
-export function buildKickOff(event: SportsDbEvent): string {
-  // strTimestamp is UTC, e.g. "2025-08-15T18:00:00+00:00"
-  if (event.strTimestamp) {
-    return event.strTimestamp;
-  }
-  // Fallback to dateEvent + strTime
-  const time = event.strTime || '00:00:00';
-  return `${event.dateEvent}T${time}+00:00`;
+export function buildKickOff(event: SofascoreEvent): string {
+  return new Date(event.startTimestamp * 1000).toISOString();
 }

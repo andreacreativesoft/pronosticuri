@@ -5,7 +5,6 @@ import { calculatePoints } from '@/lib/points';
 
 export async function GET() {
   try {
-    // Find fixtures that are not finished but should be (kick_off + 3 hours ago)
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
 
     const { data: pendingFixtures } = await supabaseAdmin
@@ -18,25 +17,19 @@ export async function GET() {
       return NextResponse.json({ message: 'No fixtures to update', updated: 0 });
     }
 
-    const apiIds = pendingFixtures.map((f) => String(f.api_fixture_id));
+    const apiIds = pendingFixtures.map((f) => f.api_fixture_id);
     const apiEvents = await getEventsByIds(apiIds);
 
     let updated = 0;
 
     for (const event of apiEvents) {
       const status = mapEventStatus(event);
-
       if (status !== 'finished') continue;
-      if (event.intHomeScore == null || event.intAwayScore == null) continue;
 
-      const homeScore = parseInt(event.intHomeScore, 10);
-      const awayScore = parseInt(event.intAwayScore, 10);
+      const homeScore = event.homeScore?.current;
+      const awayScore = event.awayScore?.current;
+      if (homeScore == null || awayScore == null) continue;
 
-      if (isNaN(homeScore) || isNaN(awayScore)) continue;
-
-      const eventId = parseInt(event.idEvent, 10);
-
-      // Update fixture score and status
       const { error: updateError } = await supabaseAdmin
         .from('fixtures')
         .update({
@@ -44,20 +37,16 @@ export async function GET() {
           away_score: awayScore,
           status: 'finished',
         })
-        .eq('api_fixture_id', eventId);
+        .eq('api_fixture_id', event.id);
 
       if (updateError) {
-        console.error(`Error updating fixture ${event.idEvent}:`, updateError);
+        console.error(`Error updating fixture ${event.id}:`, updateError);
         continue;
       }
 
-      // Get the internal fixture ID
-      const dbFixture = pendingFixtures.find(
-        (f) => f.api_fixture_id === eventId
-      );
+      const dbFixture = pendingFixtures.find((f) => f.api_fixture_id === event.id);
       if (!dbFixture) continue;
 
-      // Calculate points for all predictions on this fixture
       const { data: predictions } = await supabaseAdmin
         .from('predictions')
         .select('id, player_id, predicted_home, predicted_away')
