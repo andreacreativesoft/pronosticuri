@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
 
 const publicPaths = ['/login', '/signup', '/api/auth/login', '/api/auth/signup'];
 const cronPaths = ['/api/cron/'];
@@ -21,7 +20,6 @@ export function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // Vercel cron jobs pass the secret via header
     const vercelCronSecret = request.headers.get('x-vercel-cron-secret');
     if (cronSecret && vercelCronSecret === cronSecret) {
       return NextResponse.next();
@@ -39,22 +37,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check auth for protected routes
+  // Check auth cookie exists (actual JWT verification happens in API routes)
   const token = request.cookies.get('pronoliga_token')?.value;
 
   if (!token) {
-    // API routes return 401
     if (pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Neautentificat' }, { status: 401 });
-    }
-    // Page routes redirect to login
-    return NextResponse.redirect(new URL('/login', request.url));
-  }
-
-  const payload = verifyToken(token);
-  if (!payload) {
-    if (pathname.startsWith('/api/')) {
-      return NextResponse.json({ error: 'Token invalid' }, { status: 401 });
     }
     return NextResponse.redirect(new URL('/login', request.url));
   }
