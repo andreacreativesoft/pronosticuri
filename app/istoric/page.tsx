@@ -151,19 +151,19 @@ export default function HistoryPage() {
               <p className="text-gray-500 text-sm">Nu sunt meciuri pentru această etapă.</p>
             ) : (
               <div className="overflow-x-auto -mx-4 px-4">
-                <table className="w-full text-xs bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <table className="w-full text-sm bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-3 py-2 font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[160px]">
+                      <th className="text-left px-3 py-2.5 font-semibold text-gray-600 sticky left-0 bg-gray-50 z-10">
                         Meci
                       </th>
-                      <th className="text-center px-2 py-2 font-semibold text-gray-600 min-w-[50px]">
+                      <th className="text-center px-3 py-2.5 font-semibold text-gray-600 w-[60px]">
                         Scor
                       </th>
                       {players.map((p) => (
                         <th
                           key={p.id}
-                          className="text-center px-2 py-2 font-semibold text-gray-600 min-w-[60px]"
+                          className="text-center px-2 py-2.5 font-semibold text-gray-600 min-w-[70px]"
                         >
                           {p.name}
                         </th>
@@ -172,20 +172,28 @@ export default function HistoryPage() {
                   </thead>
                   <tbody>
                     {fixtures.map((fixture) => (
-                      <tr key={fixture.id} className="border-b border-gray-50">
-                        <td className="px-3 py-2 sticky left-0 bg-white">
-                          <div className="flex items-center gap-1.5">
-                            <ImgWithFallback src={fixture.home_logo} alt={fixture.home_team} />
-                            <span className="truncate max-w-[60px]">{fixture.home_team}</span>
-                            <span className="text-gray-400 mx-0.5">-</span>
-                            <ImgWithFallback src={fixture.away_logo} alt={fixture.away_team} />
-                            <span className="truncate max-w-[60px]">{fixture.away_team}</span>
+                      <tr key={fixture.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                        <td className="px-3 py-2 sticky left-0 bg-white z-10">
+                          <div className="flex flex-col gap-0.5 min-w-[180px]">
+                            <div className="flex items-center gap-2">
+                              <ImgWithFallback src={fixture.home_logo} alt={fixture.home_team} />
+                              <span className="font-medium whitespace-nowrap">{fixture.home_team}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <ImgWithFallback src={fixture.away_logo} alt={fixture.away_team} />
+                              <span className="font-medium whitespace-nowrap">{fixture.away_team}</span>
+                            </div>
                           </div>
                         </td>
-                        <td className="text-center px-2 py-2 font-bold text-[#1B5E20]">
-                          {fixture.status === 'finished'
-                            ? `${fixture.home_score}-${fixture.away_score}`
-                            : '-'}
+                        <td className="text-center px-3 py-2 font-bold text-[#1B5E20]">
+                          {fixture.status === 'finished' ? (
+                            <div className="flex flex-col items-center">
+                              <span>{fixture.home_score}</span>
+                              <span>{fixture.away_score}</span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
                         </td>
                         {players.map((p) => {
                           const pred = getPlayerPrediction(p.id, fixture.id);
@@ -198,23 +206,24 @@ export default function HistoryPage() {
                           }
                           return (
                             <td key={p.id} className="text-center px-2 py-2">
-                              <span
-                                className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${pointsBg(pred.points_earned)}`}
+                              <div
+                                className={`inline-flex flex-col items-center px-2 py-0.5 rounded-md text-sm font-medium ${pointsBg(pred.points_earned)}`}
                               >
-                                {pred.predicted_home}-{pred.predicted_away}
-                              </span>
+                                <span>{pred.predicted_home}</span>
+                                <span>{pred.predicted_away}</span>
+                              </div>
                             </td>
                           );
                         })}
                       </tr>
                     ))}
                     <tr className="bg-gray-50 font-bold">
-                      <td className="px-3 py-2 sticky left-0 bg-gray-50 text-gray-600">
+                      <td className="px-3 py-2.5 sticky left-0 bg-gray-50 z-10 text-gray-600">
                         Total etapă
                       </td>
                       <td />
                       {players.map((p) => (
-                        <td key={p.id} className="text-center px-2 py-2 text-[#1B5E20]">
+                        <td key={p.id} className="text-center px-2 py-2.5 text-[#1B5E20] text-base">
                           {getPlayerTotal(p.id)}
                         </td>
                       ))}

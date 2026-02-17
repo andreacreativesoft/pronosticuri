@@ -120,11 +120,11 @@ export function mapEventStatus(event: TSDBEvent): 'scheduled' | 'live' | 'finish
 }
 
 export function buildKickOff(event: TSDBEvent): string {
-  // Use timestamp if available
+  // Priority 1: strTimestamp — TheSportsDB sends ISO 8601 strings (e.g. "2025-02-20T15:00:00+00:00")
   if (event.strTimestamp) {
-    const ts = parseInt(event.strTimestamp);
-    if (!isNaN(ts)) {
-      return new Date(ts * 1000).toISOString();
+    const d = new Date(event.strTimestamp);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
     }
   }
 

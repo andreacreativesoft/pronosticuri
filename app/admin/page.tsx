@@ -32,6 +32,8 @@ const TEAMS = [
   'Sepsi OSK',
   'FC Arges',
   'Gloria Buzau',
+  'Csikszereda M. Ciuc',
+  'Metaloglobus Bucuresti',
 ];
 
 export default function AdminPage() {
