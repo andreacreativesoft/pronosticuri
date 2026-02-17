@@ -43,6 +43,8 @@ export default function AdminPage() {
   // Sync state
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState('');
+  const [syncElapsed, setSyncElapsed] = useState(0);
+  const [syncStatus, setSyncStatus] = useState('');
 
   // Add fixtures state
   const [matchweek, setMatchweek] = useState(1);
@@ -95,21 +97,34 @@ export default function AdminPage() {
   async function handleSync() {
     setSyncing(true);
     setSyncResult('');
+    setSyncElapsed(0);
+    setSyncStatus('Se conecteaza la TheSportsDB...');
+
+    const startTime = Date.now();
+    const timer = setInterval(() => {
+      setSyncElapsed(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
+
     try {
+      setSyncStatus('Se descarca meciurile...');
       const res = await fetch('/api/admin/sync', {
         method: 'POST',
         headers: adminHeaders(),
       });
+      setSyncStatus('Se proceseaza raspunsul...');
       const data = await res.json();
       if (!res.ok) {
         setSyncResult(`Eroare: ${data.error}`);
       } else {
-        setSyncResult(`Sincronizare completa: ${data.synced} meciuri din ${data.total}`);
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        setSyncResult(`Sincronizare completa: ${data.synced} meciuri din ${data.total} (${elapsed}s)`);
       }
     } catch {
       setSyncResult('Eroare de conexiune');
     } finally {
+      clearInterval(timer);
       setSyncing(false);
+      setSyncStatus('');
     }
   }
 
@@ -356,6 +371,15 @@ export default function AdminPage() {
             >
               {syncing ? 'Se sincronizeaza...' : 'Sincronizeaza acum'}
             </button>
+            {syncing && (
+              <div className="mt-3 flex items-center gap-3">
+                <div className="animate-spin h-5 w-5 border-2 border-[#1B5E20] border-t-transparent rounded-full" />
+                <div className="text-sm text-gray-700">
+                  <span className="font-medium">{syncStatus}</span>
+                  <span className="ml-2 text-gray-500">{syncElapsed}s</span>
+                </div>
+              </div>
+            )}
             {syncResult && (
               <div
                 className={`mt-4 p-3 rounded-lg text-sm ${
