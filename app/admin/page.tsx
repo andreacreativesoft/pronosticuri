@@ -68,14 +68,27 @@ export default function AdminPage() {
     [pin]
   );
 
-  function handleAuth(e: React.FormEvent) {
+  async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
     if (pin.length < 4) {
       setAuthError('PIN-ul trebuie sa aiba minim 4 cifre');
       return;
     }
-    setAuthenticated(true);
-    setAuthError('');
+
+    // Verify PIN against server
+    try {
+      const res = await fetch('/api/admin/verify', {
+        headers: { 'x-admin-pin': pin },
+      });
+      if (!res.ok) {
+        setAuthError('PIN incorect');
+        return;
+      }
+      setAuthenticated(true);
+      setAuthError('');
+    } catch {
+      setAuthError('Eroare de conexiune');
+    }
   }
 
   // Sync from TheSportsDB
