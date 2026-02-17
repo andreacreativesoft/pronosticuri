@@ -1,4 +1,7 @@
 {
+  "git": {
+    "deploymentEnabled": true
+  },
   "crons": [
     {
       "path": "/api/cron/sync-fixtures",
