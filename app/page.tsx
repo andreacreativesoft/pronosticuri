@@ -28,6 +28,7 @@ interface Prediction {
 interface Player {
   id: string;
   name: string;
+  avatar_url: string | null;
 }
 
 export default function DashboardPage() {
@@ -181,7 +182,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen pb-20 sm:pb-4">
-      <Navbar playerName={player?.name} />
+      <Navbar playerName={player?.name} avatarUrl={player?.avatar_url} />
 
       {toast && (
         <Toast

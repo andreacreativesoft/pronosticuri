@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-export default function Navbar({ playerName }: { playerName?: string }) {
+export default function Navbar({ playerName, avatarUrl }: { playerName?: string; avatarUrl?: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -31,6 +31,13 @@ export default function Navbar({ playerName }: { playerName?: string }) {
           </Link>
           {playerName && (
             <div className="flex items-center gap-3">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={playerName} className="w-7 h-7 rounded-full object-cover border border-white/30" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold">
+                  {playerName.charAt(0).toUpperCase()}
+                </div>
+              )}
               <span className="text-sm text-green-200 hidden sm:inline">
                 {playerName}
               </span>

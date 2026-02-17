@@ -11,7 +11,7 @@ export async function GET() {
 
     const { data: player } = await supabaseAdmin
       .from('players')
-      .select('id, name, phone, total_points, exact_scores, correct_signs')
+      .select('id, name, phone, avatar_url, total_points, exact_scores, correct_signs')
       .eq('id', payload.playerId)
       .single();
 

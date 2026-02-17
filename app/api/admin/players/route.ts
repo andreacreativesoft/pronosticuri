@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 export async function GET() {
   const { data, error } = await supabaseAdmin
     .from('players')
-    .select('id, name, created_at')
+    .select('id, name, avatar_url, created_at')
     .order('name');
 
   if (error) {
@@ -15,17 +15,26 @@ export async function GET() {
   return NextResponse.json({ players: data });
 }
 
-// PATCH: rename a player
+// PATCH: update player (name and/or avatar)
 export async function PATCH(req: NextRequest) {
-  const { id, name } = await req.json();
+  const body = await req.json();
+  const { id, name, avatar_url } = body;
 
-  if (!id || !name) {
-    return NextResponse.json({ error: 'id and name required' }, { status: 400 });
+  if (!id) {
+    return NextResponse.json({ error: 'id required' }, { status: 400 });
+  }
+
+  const updates: Record<string, string> = {};
+  if (name !== undefined) updates.name = name.trim();
+  if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin
     .from('players')
-    .update({ name: name.trim() })
+    .update(updates)
     .eq('id', id);
 
   if (error) {

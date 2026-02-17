@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const { data: players, error } = await supabaseAdmin
       .from('players')
-      .select('id, name, total_points, exact_scores, correct_signs')
+      .select('id, name, avatar_url, total_points, exact_scores, correct_signs')
       .order('total_points', { ascending: false })
       .order('exact_scores', { ascending: false })
       .order('name', { ascending: true });

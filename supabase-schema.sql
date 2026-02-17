@@ -9,6 +9,7 @@ CREATE TABLE players (
   total_points INTEGER DEFAULT 0,
   exact_scores INTEGER DEFAULT 0,
   correct_signs INTEGER DEFAULT 0,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

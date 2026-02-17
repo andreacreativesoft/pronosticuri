@@ -19,6 +19,7 @@ interface Fixture {
 interface PlayerInfo {
   id: string;
   name: string;
+  avatar_url: string | null;
 }
 
 interface PredictionRow {
@@ -50,6 +51,7 @@ export default function HistoryPage() {
   const [predictions, setPredictions] = useState<PredictionRow[]>([]);
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [playerName, setPlayerName] = useState<string | undefined>();
+  const [playerAvatar, setPlayerAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -63,6 +65,7 @@ export default function HistoryPage() {
         if (meRes.ok) {
           const meData = await meRes.json();
           setPlayerName(meData.player.name);
+          setPlayerAvatar(meData.player.avatar_url || null);
         }
 
         if (mwRes.ok) {
@@ -124,7 +127,7 @@ export default function HistoryPage() {
 
   return (
     <div className="min-h-screen pb-20 sm:pb-4">
-      <Navbar playerName={playerName} />
+      <Navbar playerName={playerName} avatarUrl={playerAvatar} />
 
       <main className="max-w-4xl mx-auto px-4 py-4">
         <h1 className="text-xl font-bold text-gray-800 mb-4">Istoric</h1>
@@ -165,7 +168,16 @@ export default function HistoryPage() {
                           key={p.id}
                           className="text-center px-2 py-2.5 font-semibold text-gray-600 min-w-[70px]"
                         >
-                          {p.name}
+                          <div className="flex flex-col items-center gap-1">
+                            {p.avatar_url ? (
+                              <img src={p.avatar_url} alt={p.name} className="w-6 h-6 rounded-full object-cover" />
+                            ) : (
+                              <div className="w-6 h-6 rounded-full bg-[#1B5E20]/10 flex items-center justify-center text-[#1B5E20] text-[10px] font-bold">
+                                {p.name.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="text-xs">{p.name}</span>
+                          </div>
                         </th>
                       ))}
                     </tr>

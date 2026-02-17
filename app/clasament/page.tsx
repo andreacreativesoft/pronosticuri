@@ -6,6 +6,7 @@ import Navbar from '@/components/Navbar';
 interface LeaderboardPlayer {
   id: string;
   name: string;
+  avatar_url: string | null;
   total_points: number;
   exact_scores: number;
   correct_signs: number;
@@ -15,6 +16,7 @@ export default function LeaderboardPage() {
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [playerName, setPlayerName] = useState<string | undefined>();
+  const [playerAvatar, setPlayerAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export default function LeaderboardPage() {
           const meData = await meRes.json();
           setCurrentPlayerId(meData.player.id);
           setPlayerName(meData.player.name);
+          setPlayerAvatar(meData.player.avatar_url || null);
         }
       } catch {
         // silently fail
@@ -47,7 +50,7 @@ export default function LeaderboardPage() {
 
   return (
     <div className="min-h-screen pb-20 sm:pb-4">
-      <Navbar playerName={playerName} />
+      <Navbar playerName={playerName} avatarUrl={playerAvatar} />
 
       <main className="max-w-xl mx-auto px-4 py-4">
         <h1 className="text-xl font-bold text-gray-800 mb-4">Clasament</h1>
@@ -91,9 +94,16 @@ export default function LeaderboardPage() {
                   <span className={`text-sm font-bold ${rank <= 3 ? 'text-[#1B5E20]' : 'text-gray-400'}`}>
                     {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank}
                   </span>
-                  <span className={`text-sm truncate ${isMe ? 'font-bold text-[#1B5E20]' : 'text-gray-800'}`}>
-                    {p.name}
-                  </span>
+                  <div className={`flex items-center gap-2 min-w-0 ${isMe ? 'font-bold text-[#1B5E20]' : 'text-gray-800'}`}>
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt={p.name} className="w-6 h-6 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-[#1B5E20]/10 flex items-center justify-center text-[#1B5E20] text-[10px] font-bold flex-shrink-0">
+                        {p.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm truncate">{p.name}</span>
+                  </div>
                   <span className="text-sm font-bold text-center text-gray-800">
                     {p.total_points}
                   </span>

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     const { data: players } = await supabaseAdmin
       .from('players')
-      .select('id, name')
+      .select('id, name, avatar_url')
       .order('name');
 
     return NextResponse.json({

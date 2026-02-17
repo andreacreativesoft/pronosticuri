@@ -65,11 +65,12 @@ export default function AdminPage() {
   const [resultsMessage, setResultsMessage] = useState('');
 
   // Players state
-  const [playersList, setPlayersList] = useState<{ id: string; name: string }[]>([]);
+  const [playersList, setPlayersList] = useState<{ id: string; name: string; avatar_url: string | null }[]>([]);
   const [editingPlayer, setEditingPlayer] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersMessage, setPlayersMessage] = useState('');
+  const [uploadingAvatar, setUploadingAvatar] = useState<string | null>(null);
 
   const adminHeaders = useCallback(
     () => ({
@@ -636,12 +637,101 @@ export default function AdminPage() {
             ) : playersList.length === 0 ? (
               <p className="text-sm text-gray-500">Nu exista jucatori</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {playersList.map((p) => (
                   <div
                     key={p.id}
                     className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50"
                   >
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                      {p.avatar_url ? (
+                        <img
+                          src={p.avatar_url}
+                          alt={p.name}
+                          className="w-10 h-10 rounded-full object-cover border-2 border-[#1B5E20]/20"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-[#1B5E20]/10 flex items-center justify-center text-[#1B5E20] font-bold text-sm">
+                          {p.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <label
+                        className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#1B5E20] text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-[#145218] transition"
+                        title="Schimba poza"
+                      >
+                        <span className="text-[10px] leading-none">+</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={uploadingAvatar === p.id}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (file.size > 500 * 1024) {
+                              setPlayersMessage('Eroare: Imaginea trebuie sa fie max 500KB');
+                              return;
+                            }
+                            setUploadingAvatar(p.id);
+                            setPlayersMessage('');
+                            try {
+                              const reader = new FileReader();
+                              const dataUrl = await new Promise<string>((resolve, reject) => {
+                                reader.onload = () => resolve(reader.result as string);
+                                reader.onerror = reject;
+                                reader.readAsDataURL(file);
+                              });
+
+                              // Resize image to 150x150 max
+                              const resized = await new Promise<string>((resolve) => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  const canvas = document.createElement('canvas');
+                                  const size = 150;
+                                  canvas.width = size;
+                                  canvas.height = size;
+                                  const ctx = canvas.getContext('2d')!;
+                                  const min = Math.min(img.width, img.height);
+                                  const sx = (img.width - min) / 2;
+                                  const sy = (img.height - min) / 2;
+                                  ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+                                  resolve(canvas.toDataURL('image/jpeg', 0.8));
+                                };
+                                img.src = dataUrl;
+                              });
+
+                              const res = await fetch('/api/admin/players', {
+                                method: 'PATCH',
+                                headers: adminHeaders(),
+                                body: JSON.stringify({ id: p.id, avatar_url: resized }),
+                              });
+                              if (res.ok) {
+                                setPlayersList((prev) =>
+                                  prev.map((pl) =>
+                                    pl.id === p.id ? { ...pl, avatar_url: resized } : pl
+                                  )
+                                );
+                                setPlayersMessage('Poza actualizata');
+                              } else {
+                                setPlayersMessage('Eroare la salvare poza');
+                              }
+                            } catch {
+                              setPlayersMessage('Eroare la procesare imagine');
+                            } finally {
+                              setUploadingAvatar(null);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </label>
+                      {uploadingAvatar === p.id && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-full">
+                          <div className="animate-spin h-4 w-4 border-2 border-[#1B5E20] border-t-transparent rounded-full" />
+                        </div>
+                      )}
+                    </div>
+
                     {editingPlayer === p.id ? (
                       <>
                         <input
@@ -694,6 +784,29 @@ export default function AdminPage() {
                         >
                           Redenumeste
                         </button>
+                        {p.avatar_url && (
+                          <button
+                            onClick={async () => {
+                              if (!confirm('Stergi poza de profil?')) return;
+                              const res = await fetch('/api/admin/players', {
+                                method: 'PATCH',
+                                headers: adminHeaders(),
+                                body: JSON.stringify({ id: p.id, avatar_url: null }),
+                              });
+                              if (res.ok) {
+                                setPlayersList((prev) =>
+                                  prev.map((pl) =>
+                                    pl.id === p.id ? { ...pl, avatar_url: null } : pl
+                                  )
+                                );
+                                setPlayersMessage('Poza stearsa');
+                              }
+                            }}
+                            className="px-3 py-1.5 text-sm text-red-500 hover:bg-red-50 rounded-lg"
+                          >
+                            Sterge poza
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
