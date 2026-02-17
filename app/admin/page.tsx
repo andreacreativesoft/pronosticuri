@@ -40,7 +40,7 @@ export default function AdminPage() {
   const [pin, setPin] = useState('');
   const [authenticated, setAuthenticated] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [tab, setTab] = useState<'sync' | 'add' | 'results'>('sync');
+  const [tab, setTab] = useState<'sync' | 'add' | 'results' | 'players'>('sync');
 
   // Sync state
   const [syncing, setSyncing] = useState(false);
@@ -63,6 +63,13 @@ export default function AdminPage() {
   const [loadingFixtures, setLoadingFixtures] = useState(false);
   const [savingResults, setSavingResults] = useState(false);
   const [resultsMessage, setResultsMessage] = useState('');
+
+  // Players state
+  const [playersList, setPlayersList] = useState<{ id: string; name: string }[]>([]);
+  const [editingPlayer, setEditingPlayer] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [playersLoading, setPlayersLoading] = useState(false);
+  const [playersMessage, setPlayersMessage] = useState('');
 
   const adminHeaders = useCallback(
     () => ({
@@ -216,6 +223,18 @@ export default function AdminPage() {
     }
   }, [authenticated, tab, resultsMatchweek, loadFixtures]);
 
+  // Load players when players tab is active
+  useEffect(() => {
+    if (authenticated && tab === 'players') {
+      setPlayersLoading(true);
+      fetch('/api/admin/players', { headers: adminHeaders() })
+        .then((res) => res.json())
+        .then((data) => setPlayersList(data.players || []))
+        .catch(() => setPlayersMessage('Eroare la incarcare'))
+        .finally(() => setPlayersLoading(false));
+    }
+  }, [authenticated, tab, adminHeaders]);
+
   function updateScore(fixtureId: string, side: 'home' | 'away', value: string) {
     setScores((prev) => {
       const next = new Map(prev);
@@ -339,6 +358,7 @@ export default function AdminPage() {
             { key: 'sync' as const, label: 'Sincronizare API' },
             { key: 'add' as const, label: 'Adauga meciuri' },
             { key: 'results' as const, label: 'Rezultate' },
+            { key: 'players' as const, label: 'Jucatori' },
           ].map((t) => (
             <button
               key={t.key}
@@ -602,6 +622,93 @@ export default function AdminPage() {
                 }`}
               >
                 {resultsMessage}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Players Tab */}
+        {tab === 'players' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <h2 className="text-lg font-semibold mb-4">Jucatori</h2>
+            {playersLoading ? (
+              <p className="text-sm text-gray-500">Se incarca...</p>
+            ) : playersList.length === 0 ? (
+              <p className="text-sm text-gray-500">Nu exista jucatori</p>
+            ) : (
+              <div className="space-y-2">
+                {playersList.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50"
+                  >
+                    {editingPlayer === p.id ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1B5E20]"
+                          autoFocus
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!editName.trim()) return;
+                            const res = await fetch('/api/admin/players', {
+                              method: 'PATCH',
+                              headers: adminHeaders(),
+                              body: JSON.stringify({ id: p.id, name: editName.trim() }),
+                            });
+                            if (res.ok) {
+                              setPlayersList((prev) =>
+                                prev.map((pl) =>
+                                  pl.id === p.id ? { ...pl, name: editName.trim() } : pl
+                                )
+                              );
+                              setEditingPlayer(null);
+                              setPlayersMessage('Nume actualizat');
+                            } else {
+                              setPlayersMessage('Eroare la salvare');
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-[#1B5E20] text-white text-sm rounded-lg hover:bg-[#145218]"
+                        >
+                          Salveaza
+                        </button>
+                        <button
+                          onClick={() => setEditingPlayer(null)}
+                          className="px-3 py-1.5 text-gray-600 text-sm hover:text-gray-900"
+                        >
+                          Anuleaza
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm font-medium">{p.name}</span>
+                        <button
+                          onClick={() => {
+                            setEditingPlayer(p.id);
+                            setEditName(p.name);
+                          }}
+                          className="px-3 py-1.5 text-sm text-[#1B5E20] hover:bg-[#1B5E20]/10 rounded-lg"
+                        >
+                          Redenumeste
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {playersMessage && (
+              <div
+                className={`mt-3 p-3 rounded-lg text-sm ${
+                  playersMessage.startsWith('Eroare')
+                    ? 'bg-red-50 border border-red-200 text-red-700'
+                    : 'bg-green-50 border border-green-200 text-green-700'
+                }`}
+              >
+                {playersMessage}
               </div>
             )}
           </div>
