@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const publicPaths = ['/login', '/signup', '/api/auth/login', '/api/auth/signup'];
 const cronPaths = ['/api/cron/'];
+const adminPaths = ['/admin', '/api/admin/'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -26,6 +27,18 @@ export function middleware(request: NextRequest) {
     }
 
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Admin paths: page is public (has its own PIN gate), API checks admin PIN header
+  if (adminPaths.some(path => pathname === path || pathname.startsWith(path))) {
+    if (pathname.startsWith('/api/admin/')) {
+      const adminPin = request.headers.get('x-admin-pin');
+      const expectedPin = process.env.ADMIN_PIN;
+      if (!expectedPin || adminPin !== expectedPin) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+    return NextResponse.next();
   }
 
   // Allow static files and Next.js internals

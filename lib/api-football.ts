@@ -1,94 +1,66 @@
-// Sofascore API for Romanian SuperLiga
-// Free, no API key needed
-// Tournament ID: 152 (Romanian SuperLiga)
+// TheSportsDB API for Romanian Liga I (SuperLiga)
+// Free API — no key needed (key "3" is the free test key)
+// League ID: 4691
 
-const BASE_URL = 'https://www.sofascore.com/api/v1';
-const TOURNAMENT_ID = 152;
-const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  Accept: 'application/json',
-};
+const API_KEY = process.env.THESPORTSDB_API_KEY || '3';
+const BASE_URL = `https://www.thesportsdb.com/api/v1/json/${API_KEY}`;
+const LEAGUE_ID = 4691;
+const SEASON = '2025-2026';
 
-export interface SofascoreEvent {
-  id: number;
-  slug: string;
-  status: {
-    code: number;
-    description: string;
-    type: string; // "finished", "notstarted", "inprogress"
-  };
-  homeTeam: {
-    id: number;
-    name: string;
-    slug: string;
-  };
-  awayTeam: {
-    id: number;
-    name: string;
-    slug: string;
-  };
-  homeScore: {
-    current?: number;
-    display?: number;
-  };
-  awayScore: {
-    current?: number;
-    display?: number;
-  };
-  roundInfo?: {
-    round: number;
-  };
-  startTimestamp: number; // Unix timestamp
-}
-
-interface SeasonsResponse {
-  seasons: { id: number; name: string; year: string }[];
+export interface TSDBEvent {
+  idEvent: string;
+  strEvent: string;
+  strHomeTeam: string;
+  strAwayTeam: string;
+  intHomeScore: string | null;
+  intAwayScore: string | null;
+  intRound: string;
+  dateEvent: string; // "2025-07-12"
+  strTime: string; // "18:00:00"
+  strStatus: string | null;
+  strHomeTeamBadge: string | null;
+  strAwayTeamBadge: string | null;
+  idHomeTeam: string;
+  idAwayTeam: string;
+  strTimestamp: string | null; // unix timestamp as string
 }
 
 interface EventsResponse {
-  events: SofascoreEvent[];
+  events: TSDBEvent[] | null;
 }
 
 async function fetchApi<T>(endpoint: string): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
-  const response = await fetch(url, { headers: HEADERS });
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    next: { revalidate: 0 },
+  });
 
   if (!response.ok) {
-    throw new Error(`Sofascore request failed: ${response.status} for ${endpoint}`);
+    throw new Error(`TheSportsDB request failed: ${response.status} for ${endpoint}`);
   }
 
   return response.json();
 }
 
-// Get the season ID for a given year (e.g. "25/26")
-export async function getSeasonId(): Promise<number | null> {
-  const data = await fetchApi<SeasonsResponse>(
-    `/unique-tournament/${TOURNAMENT_ID}/seasons`
-  );
-  if (!data.seasons || data.seasons.length === 0) return null;
-  // Most recent season is first
-  return data.seasons[0].id;
-}
-
-// Get all fixtures for a round
-export async function getFixturesForRound(seasonId: number, round: number): Promise<SofascoreEvent[]> {
+// Get all events for a specific round
+export async function getFixturesForRound(round: number): Promise<TSDBEvent[]> {
   const data = await fetchApi<EventsResponse>(
-    `/unique-tournament/${TOURNAMENT_ID}/season/${seasonId}/events/round/${round}`
+    `/eventsround.php?id=${LEAGUE_ID}&r=${round}&s=${SEASON}`
   );
   return data.events || [];
 }
 
-// Get all rounds for the season by fetching rounds until empty
-export async function getAllSeasonFixtures(seasonId: number): Promise<SofascoreEvent[]> {
-  const allEvents: SofascoreEvent[] = [];
+// Get all season fixtures by iterating rounds
+export async function getAllSeasonFixtures(): Promise<TSDBEvent[]> {
+  const allEvents: TSDBEvent[] = [];
 
   for (let round = 1; round <= 40; round++) {
     try {
-      const events = await getFixturesForRound(seasonId, round);
+      const events = await getFixturesForRound(round);
       if (!events || events.length === 0) break;
       allEvents.push(...events);
     } catch {
-      // No more rounds
       break;
     }
   }
@@ -97,38 +69,66 @@ export async function getAllSeasonFixtures(seasonId: number): Promise<SofascoreE
 }
 
 // Get a single event by ID
-export async function getEventById(eventId: number): Promise<SofascoreEvent | null> {
+export async function getEventById(eventId: string): Promise<TSDBEvent | null> {
   try {
-    const data = await fetchApi<{ event: SofascoreEvent }>(`/event/${eventId}`);
-    return data.event || null;
+    const data = await fetchApi<{ events: TSDBEvent[] | null }>(
+      `/lookupevent.php?id=${eventId}`
+    );
+    return data.events?.[0] || null;
   } catch {
     return null;
   }
 }
 
 // Get multiple events by IDs
-export async function getEventsByIds(eventIds: number[]): Promise<SofascoreEvent[]> {
-  const results: SofascoreEvent[] = [];
+export async function getEventsByIds(eventIds: number[]): Promise<TSDBEvent[]> {
+  const results: TSDBEvent[] = [];
   for (const id of eventIds) {
-    const event = await getEventById(id);
+    const event = await getEventById(String(id));
     if (event) results.push(event);
   }
   return results;
 }
 
-// Team logo URL from Sofascore
-export function getTeamLogo(teamId: number): string {
-  return `https://api.sofascore.app/api/v1/team/${teamId}/image`;
+// Team badge URL
+export function getTeamLogo(teamId: string): string {
+  return `https://www.thesportsdb.com/images/media/team/badge/${teamId}.png`;
 }
 
-export function mapEventStatus(event: SofascoreEvent): 'scheduled' | 'live' | 'finished' {
-  const type = event.status?.type?.toLowerCase() || '';
+export function mapEventStatus(event: TSDBEvent): 'scheduled' | 'live' | 'finished' {
+  const status = (event.strStatus || '').toLowerCase();
 
-  if (type === 'finished') return 'finished';
-  if (type === 'inprogress') return 'live';
+  if (
+    status === 'match finished' ||
+    status === 'ft' ||
+    status === 'aet' ||
+    status === 'pen'
+  ) {
+    return 'finished';
+  }
+
+  if (
+    status.includes('half') ||
+    status === 'live' ||
+    status === 'in progress' ||
+    /^\d+\'?$/.test(status) // "45'" or "90"
+  ) {
+    return 'live';
+  }
+
   return 'scheduled';
 }
 
-export function buildKickOff(event: SofascoreEvent): string {
-  return new Date(event.startTimestamp * 1000).toISOString();
+export function buildKickOff(event: TSDBEvent): string {
+  // Use timestamp if available
+  if (event.strTimestamp) {
+    const ts = parseInt(event.strTimestamp);
+    if (!isNaN(ts)) {
+      return new Date(ts * 1000).toISOString();
+    }
+  }
+
+  // Fallback: combine date and time
+  const time = event.strTime || '00:00:00';
+  return new Date(`${event.dateEvent}T${time}+02:00`).toISOString();
 }

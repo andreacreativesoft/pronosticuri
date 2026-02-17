@@ -6,7 +6,8 @@ import {
   buildKickOff,
 } from '@/lib/api-football';
 
-export async function GET() {
+// POST: trigger manual sync from TheSportsDB
+export async function POST() {
   try {
     const events = await getAllSeasonFixtures();
 
@@ -51,7 +52,7 @@ export async function GET() {
 
     return NextResponse.json({ message: 'Sync complete', synced, total: events.length });
   } catch (error) {
-    console.error('Fixture sync error:', error);
+    console.error('Manual sync error:', error);
     return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
   }
 }
